@@ -1,94 +1,86 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 
-function Practice() {
-  const [transcript, setTranscript] = useState('');
-  const [response, setResponse] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [recognition, setRecognition] = useState(null);
+const Practice = () => {
+  const [userInput, setUserInput] = useState('');  // State to hold user input
+  const [nlpResult, setNlpResult] = useState('');  // State to hold NLP result
+  const [loading, setLoading] = useState(false);   // State for loading status
 
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognitionInstance = new SpeechRecognition();
-    recognitionInstance.continuous = true; // Keep listening
-    recognitionInstance.interimResults = true; // Show interim results
-    setRecognition(recognitionInstance);
-  }, []);
+  // Function to handle input change
+  const handleChange = (e) => {
+    setUserInput(e.target.value);
+  };
 
-  // Start listening for speech
-  const startListening = useCallback(() => {
-    if (recognition) {
-      setIsListening(true);
-      recognition.start();
+  // Function to handle form submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const response = await fetch('http://localhost:5000/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: userInput }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data = await response.json();
+      console.log(data);  // Log the response for debugging
+
+      // Set the result from the backend
+      setNlpResult(data);  // Update to use the entire result object
+    } catch (error) {
+      console.error('Error during fetch:', error);
+      setNlpResult('Error analyzing text. Please try again.'); // Optional error message
+    } finally {
+      setLoading(false);
     }
-  }, [recognition]);
-
-  // Stop listening for speech
-  const stopListening = useCallback(() => {
-    if (recognition) {
-      setIsListening(false);
-      recognition.stop();
-    }
-  }, [recognition]);
-
-  // Handle results from speech recognition
-  useEffect(() => {
-    if (recognition) {
-      recognition.onresult = (event) => {
-        let interimTranscript = ''; // Variable to hold interim results
-        let finalTranscript = ''; // Variable to hold final result
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            finalTranscript += result[0].transcript + ' '; // Accumulate final results
-          } else {
-            interimTranscript += result[0].transcript + ' '; // Accumulate interim results
-          }
-        }
-        
-        setTranscript(finalTranscript + interimTranscript); // Update transcript state
-
-        if (finalTranscript) {
-          // Speak only when there is a final transcript
-          const aiResponse = `You said: "${finalTranscript.trim()}". Let's keep practicing!`;
-          setResponse(aiResponse);
-          speakResponse(aiResponse); // Speak the AI response
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error: ", event.error);
-        stopListening(); // Stop listening on error
-      };
-    }
-  }, [recognition, stopListening]);
-
-  // Text-to-Speech function
-  const speakResponse = (text) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    window.speechSynthesis.speak(utterance);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <h1 className="text-2xl mb-4">Practice Speaking English</h1>
-      <button 
-        className={`bg-blue-500 text-white px-4 py-2 rounded ${isListening ? 'opacity-50' : ''}`}
-        onClick={isListening ? stopListening : startListening}
-        disabled={isListening}
-      >
-        {isListening ? 'Listening...' : 'Start Listening'}
-      </button>
-      <div className="mt-4">
-        <h2 className="text-lg">You said:</h2>
-        <p className="border p-2">{transcript}</p>
-      </div>
-      <div className="mt-4">
-        <h2 className="text-lg">AI Response:</h2>
-        <p className="border p-2">{response}</p>
-      </div>
+    <div className="p-4">
+      <h2 className="text-2xl mb-4">NLP Practice</h2>
+      <form onSubmit={handleSubmit}>
+        <textarea
+          className="w-full p-2 border rounded mb-4"
+          rows="4"
+          placeholder="Enter text to analyze"
+          value={userInput}
+          onChange={handleChange}
+        ></textarea>
+        <button
+          type="submit"
+          className="bg-blue-500 text-white py-2 px-4 rounded"
+          disabled={loading}
+        >
+          {loading ? 'Analyzing...' : 'Analyze Text'}
+        </button>
+      </form>
+
+      {/* Show the result */}
+      {nlpResult && (
+        <div className="mt-4">
+          <h3 className="text-xl">NLP Result:</h3>
+          <h4>Tokens:</h4>
+          <p>{nlpResult.tokens.join(', ')}</p>
+          <h4>Entities:</h4>
+          <ul>
+            {nlpResult.entities.length > 0 ? (
+              nlpResult.entities.map((entity, index) => (
+                <li key={index}>{entity[0]}: {entity[1]}</li>
+              ))
+            ) : (
+              <li>No entities found.</li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
-}
+};
 
 export default Practice;
